@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from qkv import QKVAttention
+from .qkv import QKVAttention
 
 class MultiHeadAttentionLayer(nn.Module):
     def __init__(self, d_model: int, num_heads: int):

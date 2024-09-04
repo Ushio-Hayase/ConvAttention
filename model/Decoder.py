@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 
-from MultiHeadAttention import MultiHeadAttentionLayer
-from FFNN import FFNN
+from .MultiHeadAttention import MultiHeadAttentionLayer
+from .FFNN import FFNN
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, d_model: int, dff: int, num_heads: int, dropout: float):
+    def __init__(self, d_model: int, dff: int, max_len: int, num_heads: int, dropout: float):
         super(DecoderBlock, self).__init__()
 
         self.attention1 = MultiHeadAttentionLayer(d_model, num_heads)
@@ -14,7 +14,7 @@ class DecoderBlock(nn.Module):
         self.ffnn = FFNN(d_model, dff)
         
         self.drop = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm()
+        self.norm = nn.LayerNorm([max_len, d_model])
 
     def forward(self, inputs: torch.Tensor, encoder_inputs: torch.Tensor,
                 mask: torch.Tensor) -> torch.Tensor:
@@ -39,10 +39,10 @@ class DecoderBlock(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, d_model: int, dff: int, num_heads: int, num_layers: int, dropout: float):
+    def __init__(self, d_model: int, dff: int, max_len: int, num_heads: int, num_layers: int, dropout: float):
         super(Decoder, self).__init__()
 
-        self.decoder = nn.ModuleList([DecoderBlock(d_model, dff, num_heads, dropout) for _ in range(num_layers)])
+        self.decoder = nn.ModuleList([DecoderBlock(d_model, dff, max_len ,num_heads, dropout) for _ in range(num_layers)])
 
     def forward(self, inputs: torch.Tensor, encoder_inputs: torch.Tensor,
                 mask: torch.Tensor) -> torch.Tensor:

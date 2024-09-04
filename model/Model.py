@@ -1,22 +1,46 @@
 import torch
+import torch.nn as nn
 
-from Patch_Embedding import Patch_Embd
-from Decoder import Decoder
+from model.PositionalEncoding import PositionalEncoding
+from model.Encoder import Encoder
+from model.Decoder import Decoder
 
 
-class DTrOCR(torch.nn.Module):
-    def __init__(self, d_model: int, dff: int, num_heads: int, num_layers: int, 
-                 patch_size: int, channels: int, image_size: int, dropout: float, 
-                 batch_first: bool):
-        
-        self.patch_embd = Patch_Embd(patch_size, channels, d_model, image_size, batch_first)
-        self.Decoder = Decoder(d_model, dff, num_heads, num_layers, dropout, batch_first)
-        self.batch_first = batch_first
+class Transformer(nn.Module):
+    def __init__(self, d_model: int, dff: int, num_heads: int, 
+                num_layers: int, max_len: int, vocab_size: int, dropout: float, pad_idx: int, device):
+        super(Transformer, self).__init__()
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        preprocessed_data: torch.Tensor = self.patch_embd(inputs)
-        if self.batch_first:
-            return self.Decoder(preprocessed_data)
-        else:
-            preprocessed_data = preprocessed_data.permute(1, 0, 2)
-            return self.Decoder(preprocessed_data)
+        self.pos_enc = PositionalEncoding(d_model, dropout,max_len)
+        self.embd = nn.Embedding(vocab_size, d_model, pad_idx)
+
+        self.enc = Encoder(d_model, dff, num_heads, max_len, num_layers, dropout)
+        self.dec = Decoder(d_model, dff, num_heads, max_len, num_layers, dropout)
+        self.fc = nn.Linear(d_model, vocab_size)
+
+        self.device = device
+        self.pad_idx = pad_idx
+
+
+    def forward(self, enc_inputs: torch.Tensor, dec_inputs: torch.Tensor) -> torch.Tensor:
+        enc_mask = self.create_padding_mask(enc_inputs)
+        dec_mask = self.create_attention_mask(dec_inputs.size(1)) + self.create_padding_mask(dec_inputs)
+
+        enc_inputs = self.embd(enc_inputs)
+        dec_inputs = self.embd(dec_inputs)
+
+        enc_inputs = self.pos_enc(enc_inputs)
+        dec_inputs = self.pos_enc(dec_inputs)
+
+        enc_out = self.enc(enc_inputs, enc_mask)
+        dec_out = self.dec(dec_inputs, enc_out, dec_mask)
+
+        return self.fc(dec_out)
+
+
+
+    def create_padding_mask(self, inputs: torch.Tensor) -> torch.Tensor:
+        return (inputs == self.pad_idx)
+    
+    def create_attention_mask(self, size: int) -> torch.Tensor:
+        return torch.triu(torch.ones((size, size)), diagonal=1)
