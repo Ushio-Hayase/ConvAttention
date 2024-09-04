@@ -17,18 +17,18 @@ class DecoderBlock(nn.Module):
         self.norm = nn.LayerNorm([max_len, d_model])
 
     def forward(self, inputs: torch.Tensor, encoder_inputs: torch.Tensor,
-                mask: torch.Tensor) -> torch.Tensor:
+                tgt_mask:torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
         """
         Decoder Block 
 
         mask must be Boolean Tensor
         """
         inputs1 = self.norm(inputs)
-        inputs1 = self.attention1(inputs1, inputs1, inputs1, mask)
+        inputs1 = self.attention1(inputs1, inputs1, inputs1, tgt_mask)
         inputs1 = self.drop(inputs1) + inputs
 
         inputs2 = self.norm(inputs1)
-        inputs2 = self.attention2(inputs2, encoder_inputs, encoder_inputs)
+        inputs2 = self.attention2(inputs2, encoder_inputs, encoder_inputs, src_mask)
         inputs2 = self.drop(inputs2) + inputs1
 
         inputs3 = self.norm(inputs2)
@@ -45,12 +45,12 @@ class Decoder(nn.Module):
         self.decoder = nn.ModuleList([DecoderBlock(d_model, dff, max_len ,num_heads, dropout) for _ in range(num_layers)])
 
     def forward(self, inputs: torch.Tensor, encoder_inputs: torch.Tensor,
-                mask: torch.Tensor) -> torch.Tensor:
+                tgt_mask: torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
         """
         Mask argument must be Boolean Tensor
         """
         for decoder_block in self.decoder:
-            inputs = decoder_block(inputs, mask) # 디코더 레이어 개수만큼 반복
+            inputs = decoder_block(inputs, encoder_inputs, tgt_mask, src_mask) # 디코더 레이어 개수만큼 반복
 
         return inputs
         

@@ -26,13 +26,13 @@ class QKVAttention(nn.Module):
 
 
         k_t = k.transpose(2, 3) # batch_size, num_heads, d_k, seq_len
-        attention_score = torch.matmul(q, k_t) / math.sqrt(d_k)
+        attention_score = (q @ k_t) / math.sqrt(d_k)
 
         if mask is not None:
             attention_score.masked_fill_(mask, -1e6) # 마스킹
 
         attention_score: torch.Tensor = self.softmax(attention_score)
 
-        v = attention_score * v
+        v = attention_score @ v
 
         return v, attention_score
