@@ -21,6 +21,12 @@ class MultiHeadAttentionLayer(nn.Module):
 
         self.out_fc: nn.Linear = nn.Linear(d_model, d_model)
 
+    def reset(self):
+        torch.nn.init.normal_(self.w_q)
+        torch.nn.init.normal_(self.w_k)
+        torch.nn.init.normal_(self.w_v)
+        torch.nn.init.normal_(self.out_fc)
+
     def _split_heads(self, inputs: torch.Tensor, batch_size: int) -> torch.Tensor:
         inputs = inputs.view(batch_size, -1, self.num_heads, self.d_k) # batch_size, seq_len, d_model -> batch_size, seq_len, num_heads, d_k
         return inputs.permute(0, 2, 1, 3) # batch_size, num_heads, seq_len, d_k

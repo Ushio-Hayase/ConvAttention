@@ -9,10 +9,12 @@ class FFNN(nn.Module):
         self.fc1 = nn.Linear(d_model, dff)
         self.fc2 = nn.Linear(dff, d_model)
 
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         inputs = self.fc1(inputs)
-        inputs = nn.functional.gelu(inputs)
+        inputs = nn.functional.leaky_relu(inputs)
         inputs = self.fc2(inputs)
+        
 
         return inputs
     

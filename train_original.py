@@ -4,23 +4,23 @@ import numpy as np
 import torch.utils
 import torch.utils.data
 from torch.utils.tensorboard import SummaryWriter
-from transformers import BertTokenizerFast
+from transformers import BertTokenizerFast, AutoTokenizer
 
 from dataset import Dataset
 from original_transformer_model.model import Transformer
 
 
-tokenizer = BertTokenizerFast.from_pretrained("kykim/bert-kor-base")
+tokenizer = AutoTokenizer.from_pretrained("quantumaikr/KoreanLM")
 
-EPOCH = 5
-BATCH_SIZE = 32
+EPOCH = 20
+BATCH_SIZE = 128
 LR = 1e-5
 D_MODEL = 512
 DFF = 1024
-NUM_HEADS = 4
-NUM_LAYERS = 4
+NUM_HEADS = 8
+NUM_LAYERS = 8
 MAX_LEN = 128
-VOCAB_SIZE = 42000
+VOCAB_SIZE = tokenizer.vocab_size
 DROP_OUT = 0.1
 PAD_IDX = tokenizer.pad_token_id
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -28,7 +28,7 @@ DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 def acc_func(true: torch.Tensor, pred: torch.Tensor) -> float:
     pred = torch.argmax(pred, dim=-1)
     
-    return torch.eq(true, pred).to(torch.float).mean().item()
+    return torch.eq(true, pred).float().mean().item()
 
 def main():
     writer = SummaryWriter()
@@ -41,8 +41,8 @@ def main():
 
 
     train_dataset = Dataset(data[:train_len, 0], data[:train_len, 1])
-    vaild_dataset = Dataset(data[train_len:valid_len, 0], data[train_len:valid_len, 1])
-    test_dataset = Dataset(data[valid_len:test_len, 0], data[valid_len:test_len, 1])
+    vaild_dataset = Dataset(data[train_len:train_len+valid_len, 0], data[train_len:train_len+valid_len, 1])
+    test_dataset = Dataset(data[-test_len:, 0], data[-test_len:, 1])
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, BATCH_SIZE, True)
     valid_dataloader = torch.utils.data.DataLoader(vaild_dataset, BATCH_SIZE, False)
@@ -50,25 +50,25 @@ def main():
 
 
     model = Transformer(D_MODEL, DFF, NUM_HEADS, NUM_LAYERS, MAX_LEN, VOCAB_SIZE, DROP_OUT, PAD_IDX, DEVICE).to(device=DEVICE)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD_IDX, label_smoothing=0.1).to(device=DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), LR)
 
     for epoch in range(EPOCH):
         with tqdm.tqdm(train_dataloader, unit="batch") as tepoch:
             for i, (x, y) in enumerate(tepoch):
                 tepoch.set_description(f"Epoch {epoch + 1}")
-                x = tokenizer(x, padding="max_length", max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].to(device=DEVICE)
-                y = tokenizer(y, padding="max_length", max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].to(device=DEVICE)
+                x = tokenizer(x, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+            
 
-                pad_tensor = torch.asarray([[tokenizer.pad_token_id]]).to(device=DEVICE)
-                pad_tensor = pad_tensor.repeat([BATCH_SIZE, 1])
-                true_y = y[:, 1:]
-                true_y = torch.concat([true_y, pad_tensor], dim=1)
+                true_y = []
 
-                discriminator = y!=tokenizer.sep_token_id
-                dec_in = y[discriminator]
-                dec_in = dec_in.view(discriminator.size(0), discriminator.size(1)-1)
-                dec_in = torch.concat([dec_in, pad_tensor], dim=1)
+                for k in y:
+                    true_y.append(k + tokenizer.eos_token)
+                
+                true_y = tokenizer(true_y, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+                dec_in = tokenizer(y, padding=True, truncation=True,  max_length=MAX_LEN, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+
+                optimizer.zero_grad()
 
                 pred_y = model(x, dec_in)
                 loss = criterion(pred_y.transpose(1, 2), true_y)
@@ -85,18 +85,16 @@ def main():
             with tqdm.tqdm(valid_dataloader, unit="batch") as tepoch:
                 for i, (x, y) in enumerate(tepoch):
                     tepoch.set_description(f"Epoch {epoch + 1} Valid")
-                    x = tokenizer(x, padding=True, truncation=True)['input_ids']
-                    y = tokenizer(y, padding=True, truncation=True)['input_ids']
+                    x = tokenizer(x, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+            
 
-                    pad_tensor = torch.asarray([[tokenizer.pad_token_id]]).to(device=DEVICE)
-                    pad_tensor = pad_tensor.repeat([BATCH_SIZE, 1])
-                    true_y = y[:, 1:]
-                    true_y = torch.concat([true_y, pad_tensor], dim=1)
+                    true_y = []
 
-                    discriminator = y!=tokenizer.sep_token_id
-                    dec_in = y[discriminator]
-                    dec_in = dec_in.view(discriminator.size(0), discriminator.size(1)-1)
-                    dec_in = torch.concat([dec_in, pad_tensor], dim=1)
+                    for k in y:
+                        true_y.append(k + tokenizer.eos_token)
+                    
+                    true_y = tokenizer(true_y, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+                    dec_in = tokenizer(y, padding=True, truncation=True,  max_length=MAX_LEN, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
 
                     pred_y = model(x, dec_in)
                     loss = criterion(pred_y.transpose(1, 2), true_y)
@@ -110,20 +108,16 @@ def main():
             with tqdm.tqdm(test_dataloader, unit="batch") as tepoch:
                 for i, (x, y) in enumerate(tepoch):
                     tepoch.set_description(f"Epoch {epoch + 1} Test")
-                    x = tokenizer(x, padding=True, truncation=True)['input_ids']
-                    y = tokenizer(y, padding=True, truncation=True)['input_ids']
+                    x = tokenizer(x, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+            
 
+                    true_y = []
 
-                    pad_tensor = torch.asarray([[tokenizer.pad_token_id]]).to(device=DEVICE)
-                    pad_tensor = pad_tensor.repeat([BATCH_SIZE, 1])
-                    true_y = y[:, 1:]
-                    true_y = torch.concat([true_y, pad_tensor], dim=1)
-
-                    discriminator = y!=tokenizer.sep_token_id
-                    dec_in = y[discriminator]
-                    dec_in = dec_in.view(discriminator.size(0), discriminator.size(1)-1)
-                    dec_in = torch.concat([dec_in, pad_tensor], dim=1)
-
+                    for k in y:
+                        true_y.append(k + tokenizer.eos_token)
+                    
+                    true_y = tokenizer(true_y, padding=True, add_special_tokens=False, max_length=MAX_LEN, truncation=True, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
+                    dec_in = tokenizer(y, padding=True, truncation=True,  max_length=MAX_LEN, return_tensors="pt")['input_ids'].squeeze().to(device=DEVICE)
                     pred_y = model(x, dec_in)
                     loss = criterion(pred_y.transpose(1, 2), true_y)
                     acc_value = acc_func(true_y, pred_y)
@@ -133,6 +127,7 @@ def main():
                     writer.add_scalar("acc/test", acc_value,i)
     
     writer.close()
+    torch.save(model.state_dict(), "model.pth")
 
 
             

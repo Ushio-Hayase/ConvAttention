@@ -11,7 +11,7 @@ class FFNN(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         inputs = self.fc1(inputs)
-        inputs = nn.functional.gelu(inputs)
+        inputs = nn.functional.leaky_relu(inputs)
         inputs = self.fc2(inputs)
 
         return inputs

@@ -24,12 +24,11 @@ class QKVAttention(nn.Module):
         batch_size: int = q.size(0) # 배치 사이즈
         d_k: int = q.size(3)
 
-
         k_t = k.transpose(2, 3) # batch_size, num_heads, d_k, seq_len
         attention_score = (q @ k_t) / math.sqrt(d_k)
 
         if mask is not None:
-            attention_score.masked_fill_(mask, -1e6) # 마스킹
+            attention_score.masked_fill_(mask, -10000) # 마스킹
 
         attention_score: torch.Tensor = self.softmax(attention_score)
 

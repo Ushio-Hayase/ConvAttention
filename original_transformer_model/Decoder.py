@@ -14,7 +14,9 @@ class DecoderBlock(nn.Module):
         self.ffnn = FFNN(d_model, dff)
         
         self.drop = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm([max_len, d_model])
+        self.norm1 = nn.LayerNorm([d_model])
+        self.norm2 = nn.LayerNorm([d_model])
+        self.norm3 = nn.LayerNorm([d_model])
 
     def forward(self, inputs: torch.Tensor, encoder_inputs: torch.Tensor,
                 tgt_mask:torch.Tensor, src_mask: torch.Tensor) -> torch.Tensor:
@@ -23,17 +25,18 @@ class DecoderBlock(nn.Module):
 
         mask must be Boolean Tensor
         """
-        inputs1 = self.norm(inputs)
-        inputs1 = self.attention1(inputs1, inputs1, inputs1, tgt_mask)
+        
+        inputs1 = self.attention1(inputs, inputs, inputs, tgt_mask)   
         inputs1 = self.drop(inputs1) + inputs
-
-        inputs2 = self.norm(inputs1)
-        inputs2 = self.attention2(inputs2, encoder_inputs, encoder_inputs, src_mask)
+        inputs1 = self.norm1(inputs1) 
+       
+        inputs2 = self.attention2(inputs1, encoder_inputs, encoder_inputs, src_mask)
         inputs2 = self.drop(inputs2) + inputs1
-
-        inputs3 = self.norm(inputs2)
-        inputs3 = self.ffnn(inputs3)
+        inputs2 = self.norm2(inputs2) 
+        
+        inputs3 = self.ffnn(inputs2)
         inputs3 = self.drop(inputs3) + inputs2
+        inputs3 = self.norm3(inputs3)
 
         return inputs3
 

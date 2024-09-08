@@ -13,7 +13,8 @@ class EncoderBlock(nn.Module):
         self.ffnn = FFNN(d_model, dff)
         
         self.drop = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm([max_len, d_model])
+        self.norm1 = nn.LayerNorm([d_model])
+        self.norm2 = nn.LayerNorm([d_model])
 
     def forward(self, inputs: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """
@@ -21,13 +22,16 @@ class EncoderBlock(nn.Module):
         
         mask must be Boolean Tensor
         """
-        inputs1 = self.norm(inputs)
-        inputs1 = self.attention(inputs1, inputs1, inputs1, mask)
+        
+        inputs1 = self.attention(inputs, inputs, inputs, mask)
+        
         inputs1 = self.drop(inputs1) + inputs
+        inputs1 = self.norm1(inputs1)
 
-        inputs2 = self.norm(inputs1)
-        inputs2 = self.ffnn(inputs2)
+        inputs2 = self.ffnn(inputs1)
+        
         inputs2 = self.drop(inputs2) + inputs1
+        inputs2 = self.norm2(inputs2)
 
         return inputs2
     

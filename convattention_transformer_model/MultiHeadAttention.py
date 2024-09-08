@@ -46,9 +46,9 @@ class MultiHeadAttentionLayer(nn.Module):
 
 
         # 차원 변환
-        query = self.w_q(query.transpose(1,2)) 
-        key = self.w_k(key.transpose(1,2))
-        value = self.w_v(value.transpose(1,2))
+        query = self.w_q(query.transpose(1,2)).transpose(1,2)
+        key = self.w_k(key.transpose(1,2)).transpose(1,2)
+        value = self.w_v(value.transpose(1,2)).transpose(1,2)
 
         # num heads에 따라 텐서 분리
         query = self._split_heads(query, batch_size)

@@ -11,4 +11,4 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.x)
     
     def __getitem__(self, index):
-        return (self.x[index], self.y[index])
+        return self.x[index], self.y[index]
